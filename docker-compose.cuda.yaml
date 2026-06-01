@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:latest
+    volumes:
+      - .:/home/jovyan/work
+      - .local:/.local
+    ports:
+      - 9999:8888
+    environment:
+        JUPYTER_ENABLE_LAB: 1
+        NVIDIA_VISIBLE_DEVICES: all
+        NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      bash -c "
+        pip install -r ./work/requirements.txt &&
+        start-notebook.sh --NotebookApp.token='token'
+      "
