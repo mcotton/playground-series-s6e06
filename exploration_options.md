@@ -52,7 +52,7 @@
 - Pipeline in `common.py`, model code in `xgboost.ipynb`.
 - **Best model = Exp #4: Optuna-tuned XGBoost on 8 features (cats dropped, no original data). CV 0.96548 ± 0.00124, LB 0.96668.**
 - 10-fold StratifiedKFold, `compute_sample_weight('balanced')` (computed per-fold on train), scored with `balanced_accuracy_score`. GPU (`device='cuda'`).
-- `make_new_features` still empty — **no color features yet (biggest untouched lever).**
+- Color features (`u-g, g-r, r-i, i-z`) added in `make_new_features`, but result inconclusive at #4's params (Exp #5). **Next: re-run Optuna WITH colors** — fair test requires re-tuning (esp. `max_depth`, `colsample_bytree`).
 - Original dataset: tested, dropped (Exp #3).
 - Synthetic cats (`spectral_type`, `galaxy_population`): tested, dropped (Exp #2).
 
@@ -162,3 +162,4 @@ n_estimators:     2000  (early_stopping_rounds=50 during CV; final model uses fi
 | — | (provisional) Concat original data WITHOUT train/val separation | 0.96698 ± 0.00063 | — | Caveat: original rows leaked into val folds → inflated CV. NOT a clean read. Superseded by #3. |
 | 3 | Concat original data (extra cols dropped, 8 shared features) | 0.96355 ± 0.00075 | 0.95981 | **LB down −0.0006** vs #2. Raw original is off-distribution from synthetic test → distribution shift hurts. **Original data dropped — not worth keeping.** |
 | 4 | **Optuna-tuned XGBoost** (30 trials, 5-fold), 8 features, balanced weights, GPU | 0.96548 ± 0.00124 | **0.96668** | **Best so far. LB jumped +0.0063** vs #2 while CV moved only +0.0018. CV–LB gap flipped: LB now ABOVE CV (+0.0012). Tuning's win was regularization/generalization, which test rewards more than CV shows. See params below. |
+| 5 | Add color features (`u-g, g-r, r-i, i-z`) + **reused #4's params** (NOT re-tuned) | 0.96507 ± 0.00124 | 0.96613 | **Inconclusive.** Both CV (−0.0004) and LB (−0.0005) dipped, but well within CV std (±0.0012) → noise. Params were tuned for the no-color feature set (esp. `max_depth=9`, `colsample_bytree=0.65`) so they don't exploit colors. Must re-tune Optuna *with* colors before judging. |

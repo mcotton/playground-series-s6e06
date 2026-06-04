@@ -123,6 +123,11 @@ def make_new_features(df):
     target = get_target()
     features = get_features(df)
 
+    df['u-g'] = df['u'] - df['g']
+    df['g-r'] = df['g'] - df['r']
+    df['r-i'] = df['r'] - df['i']
+    df['i-z'] = df['i'] - df['z']
+
     # df['wet_race'] = df['compound'].map({'HARD': 0, 'MEDIUM': 0, 'SOFT': 0, 'INTERMEDIATE': 1, 'WET': 1})
     # df['avg_stint_per_race'] = df['race'].map(df.groupby('race')['stint'].median())
 
