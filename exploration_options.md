@@ -122,4 +122,5 @@
 |---|------------|----|----|-------|
 | 1 | Baseline XGBoost (defaults), balanced sample weights, 10-fold, native categoricals | 0.96482 ± 0.00127 | 0.95988 | No FE, no tuning, no orig data. CV–LB gap ≈ 0.005 (~4× CV std) — track it. |
 | 2 | Drop `spectral_type` + `galaxy_population` (no orig data) | 0.96482 ± 0.00120 | 0.96041 | Identical CV, **LB up +0.0005** (0.95988→0.96041). Removing noise cols helped test generalization even though CV flat. CV–LB gap 0.0044. Dropped permanently; schema now matches original (no NaN on concat). |
-| — | (provisional) Concat original data WITHOUT train/val separation | 0.96698 ± 0.00063 | — | Caveat: original rows leaked into val folds → easier rows inflate CV + tighten std. NOT a clean read. Must re-run train-only protocol. |
+| — | (provisional) Concat original data WITHOUT train/val separation | 0.96698 ± 0.00063 | — | Caveat: original rows leaked into val folds → inflated CV. NOT a clean read. Superseded by #3. |
+| 3 | Concat original data (extra cols dropped, 8 shared features) | 0.96355 ± 0.00075 | 0.95981 | **LB down −0.0006** vs #2. Raw original is off-distribution from synthetic test → distribution shift hurts. **Original data dropped — not worth keeping.** |
