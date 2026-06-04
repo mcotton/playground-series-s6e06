@@ -45,46 +45,83 @@
 ## Key Observations
 - **`spectral_type` and `galaxy_population` are non-informative** (Exp #2: dropping them left CV identical at 0.96482). Synthetic-only decoration. Dropped permanently. Bonus: schema now matches the original dataset, so original data concats with zero NaN.
 - Discriminative signal expected to live in `redshift` + photometric bands `u,g,r,i,z` (physics + above). Confirm via feature importance.
-- Open: does original SDSS data help generalization to (synthetic) test? Must measure with original→train-only, validate on competition rows only.
+- Original SDSS data: tested (Exp #3) — hurts LB, off-distribution from synthetic test. Closed.
+- Still unexamined: **per-class confusion / recall** — we don't yet know which of GALAXY/STAR/QSO drags down balanced accuracy. Run before/after color features.
 
 ## Current State
 - Pipeline in `common.py`, model code in `xgboost.ipynb`.
-- Baseline XGBoost working: 10-fold StratifiedKFold, `compute_sample_weight('balanced')`, `enable_categorical=True`, scored with `balanced_accuracy_score`. **CV 0.96482 ± 0.00127, LB 0.95988.**
-- `make_new_features` is still empty — no color features or interactions yet.
-- Original dataset concat is **commented out** (not used).
-- Optuna block is **commented out**; `best_params` is empty, so the "tuned" run is effectively default XGBoost + `n_estimators=2000` + early stopping. No real tuning has happened yet.
+- **Best model = Exp #4: Optuna-tuned XGBoost on 8 features (cats dropped, no original data). CV 0.96548 ± 0.00124, LB 0.96668.**
+- 10-fold StratifiedKFold, `compute_sample_weight('balanced')` (computed per-fold on train), scored with `balanced_accuracy_score`. GPU (`device='cuda'`).
+- `make_new_features` still empty — **no color features yet (biggest untouched lever).**
+- Original dataset: tested, dropped (Exp #3).
+- Synthetic cats (`spectral_type`, `galaxy_population`): tested, dropped (Exp #2).
+
+### Best params (Exp #4, Optuna 30-trial TPE)
+```
+learning_rate:    0.014195
+max_depth:        9
+min_child_weight: 10
+subsample:        0.786409
+colsample_bytree: 0.653438
+reg_alpha:        1.784094
+reg_lambda:       0.000273
+gamma:            0.049709
+n_estimators:     2000  (early_stopping_rounds=50 during CV; final model uses fixed 2000, no early stop)
+```
+
+### Notes / watch-items
+- **CV–LB gap flipped sign** across experiments: #1 LB was 0.0044 *below* CV; #4 LB is 0.0012 *above* CV. Tuning improved generalization (regularization), which the synthetic test rewards more than train-distribution CV reveals. Final model also trains on 100% of data vs 90% per CV fold → another reason LB ≥ CV.
+- **Mismatch to be aware of:** CV uses early stopping (picks trees per fold), but the final submitted model fixes `n_estimators=2000` with no early stopping. Worked out here (LB strong), but the submitted config isn't exactly what CV measured.
 
 ---
 
 ## Things to Try
 
 ### Baseline (Priority: High)
-- [ ] Get a baseline XGBoost model working
-- [ ] Set up CV with the **competition metric** as scoring
-- [ ] Establish baseline CV score
-- [ ] Submit baseline to confirm CV-LB correlation
+- [x] Get a baseline XGBoost model working (Exp #1)
+- [x] Set up CV with the **competition metric** (balanced accuracy) as scoring
+- [x] Establish baseline CV score (0.96482)
+- [x] Submit baseline to confirm CV-LB correlation (LB 0.95988)
 
 ### Feature Engineering
-- [ ] Interactions and ratios that trees can't find via rectangular splits
-- [ ] Group-based aggregations
-- [ ] Target encoding (with proper CV fold separation to avoid leakage)
-- [ ] Skip pre-engineered booleans / hand-crafted formulas — XGBoost finds these itself
+- [ ] **Color features `u-g, g-r, r-i, i-z` (NEXT — biggest untouched lever).** Differences = diagonal boundaries trees approximate poorly; physically the real discriminators. See "Color Feature Theory" below.
+- [ ] Color over wider baselines too (`u-r`, `u-z`) once adjacent colors are in
+- [ ] Interactions/ratios involving `redshift` (e.g. redshift × color) — only if colors prove out
+- [x] Skip pre-engineered booleans — confirmed philosophy
 
 ### Encoding Strategies
-- [ ] XGBoost native categorical support (`enable_categorical=True`) — usually best for tree models
+- [x] XGBoost native categorical (`enable_categorical=True`) — but the only cats were noise and got dropped
 - [ ] OHE only for correlation analysis or non-tree models
 
 ### Model Options
-- [ ] XGBoost (default starting point)
-- [ ] LightGBM
+- [x] XGBoost (current model)
+- [ ] LightGBM (alt for ensembling later)
 - [ ] CatBoost
-- [ ] Hyperparameter tuning with Optuna (TPE sampler + median pruner)
-- [ ] Ensemble/stacking
+- [x] Hyperparameter tuning with Optuna (Exp #4 — big LB win)
+- [ ] Ensemble/stacking (after FE)
 
 ### Advanced
-- [ ] Blend in original dataset if available
+- [x] Blend in original dataset — tested (Exp #3), hurts, dropped
+- [ ] Per-class threshold tuning on OOF `predict_proba` to maximize balanced accuracy directly
+- [ ] Per-class confusion diagnostic (which class limits balanced accuracy?)
 - [ ] Pseudo-labeling with confident predictions
 - [ ] Feature selection (drop low-importance features)
+
+---
+
+## Color Feature Theory (why `u-g, g-r, r-i, i-z` should help)
+
+**Physics.** `u, g, r, i, z` are brightness (magnitude) in 5 filters from UV→near-IR. A single magnitude mostly encodes *how bright/far* an object is, not *what kind* it is. The object's **type** lives in the *shape of its spectrum* = how brightness changes between filters = the **differences** between bands (the "colors"). Magnitudes are logarithmic, so a difference `g-r` is really a flux *ratio* — a distance-independent fingerprint of the physics:
+- STAR: blackbody-ish, redshift≈0; colors track temperature.
+- GALAXY: redshifted stellar populations; broadband colors shift with z.
+- QSO: power-law + strong emission lines sweeping through filters as z grows → distinctive, non-stellar colors.
+
+**Why trees need them spelled out.** XGBoost splits on one feature at a time (axis-aligned). A useful boundary like `g - r > 0.5` is a **diagonal** line in (g, r) space. Trees can only approximate a diagonal with a staircase of many splits — costly in depth, and noisier near the boundary. Handing the model `g-r` directly turns that diagonal into a single axis-aligned split it can cut cleanly. This is the documented exception to "trees find combinations themselves": *differences/ratios* (linear combos) are exactly what axis-aligned splits struggle with.
+
+**Predictions to check when added:**
+- CV and LB should move *together* (unlike tuning, which only moved LB) — colors add real information, not just generalization.
+- Feature importance: colors should rank near/above raw bands; if a color outranks its parents, the diagonal-boundary story is confirmed.
+- Per-class recall: expect the biggest lift on the class currently lagging (run the confusion diagnostic to know which).
 
 ---
 
@@ -124,3 +161,4 @@
 | 2 | Drop `spectral_type` + `galaxy_population` (no orig data) | 0.96482 ± 0.00120 | 0.96041 | Identical CV, **LB up +0.0005** (0.95988→0.96041). Removing noise cols helped test generalization even though CV flat. CV–LB gap 0.0044. Dropped permanently; schema now matches original (no NaN on concat). |
 | — | (provisional) Concat original data WITHOUT train/val separation | 0.96698 ± 0.00063 | — | Caveat: original rows leaked into val folds → inflated CV. NOT a clean read. Superseded by #3. |
 | 3 | Concat original data (extra cols dropped, 8 shared features) | 0.96355 ± 0.00075 | 0.95981 | **LB down −0.0006** vs #2. Raw original is off-distribution from synthetic test → distribution shift hurts. **Original data dropped — not worth keeping.** |
+| 4 | **Optuna-tuned XGBoost** (30 trials, 5-fold), 8 features, balanced weights, GPU | 0.96548 ± 0.00124 | **0.96668** | **Best so far. LB jumped +0.0063** vs #2 while CV moved only +0.0018. CV–LB gap flipped: LB now ABOVE CV (+0.0012). Tuning's win was regularization/generalization, which test rewards more than CV shows. See params below. |
