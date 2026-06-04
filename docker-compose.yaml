@@ -2,7 +2,7 @@ version: '3'
 
 services:
   jupyter:
-    image: quay.io/jupyter/scipy-notebook:latest
+    image: quay.io/jupyter/scipy-notebook:2026-06-02
     volumes:
       - .:/home/jovyan/work
       - .local:/.local

@@ -47,9 +47,11 @@
 - Open question: are the synthetic categoricals (`spectral_type`, `galaxy_population`) informative or noise? They don't exist in the real SDSS data.
 
 ## Current State
-- Data in `archive/`. No `common.py` or notebook yet.
-- No model or CV pipeline set up yet.
-- User is doing initial EDA themselves.
+- Pipeline in `common.py`, model code in `xgboost.ipynb`.
+- Baseline XGBoost working: 10-fold StratifiedKFold, `compute_sample_weight('balanced')`, `enable_categorical=True`, scored with `balanced_accuracy_score`. **CV 0.96482 ± 0.00127, LB 0.95988.**
+- `make_new_features` is still empty — no color features or interactions yet.
+- Original dataset concat is **commented out** (not used).
+- Optuna block is **commented out**; `best_params` is empty, so the "tuned" run is effectively default XGBoost + `n_estimators=2000` + early stopping. No real tuning has happened yet.
 
 ---
 
@@ -117,3 +119,4 @@
 
 | # | Description | CV | LB | Notes |
 |---|------------|----|----|-------|
+| 1 | Baseline XGBoost (defaults), balanced sample weights, 10-fold, native categoricals | 0.96482 ± 0.00127 | 0.95988 | No FE, no tuning, no orig data. CV–LB gap ≈ 0.005 (~4× CV std) — track it. |
