@@ -55,6 +55,12 @@ def clean_data(df):
         df['class'] = df['class'].map({'GALAXY': 0, 'QSO': 1, 'STAR': 2}).astype(int)
 
     df.rename(columns={"class": "_class"}, inplace=True)
+
+    if 'spectral_type' in orig_feature_names:
+        df.drop('spectral_type', axis=1, inplace=True)
+
+    if 'galaxy_population' in orig_feature_names:
+        df.drop('galaxy_population', axis=1, inplace=True)
     
     return df
 

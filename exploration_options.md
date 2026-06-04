@@ -43,8 +43,9 @@
 | galaxy_population | 2 | Blue_Cloud (258k), Red_Sequence (320k) |
 
 ## Key Observations
-- (User exploring — to fill in after EDA)
-- Open question: are the synthetic categoricals (`spectral_type`, `galaxy_population`) informative or noise? They don't exist in the real SDSS data.
+- **`spectral_type` and `galaxy_population` are non-informative** (Exp #2: dropping them left CV identical at 0.96482). Synthetic-only decoration. Dropped permanently. Bonus: schema now matches the original dataset, so original data concats with zero NaN.
+- Discriminative signal expected to live in `redshift` + photometric bands `u,g,r,i,z` (physics + above). Confirm via feature importance.
+- Open: does original SDSS data help generalization to (synthetic) test? Must measure with original→train-only, validate on competition rows only.
 
 ## Current State
 - Pipeline in `common.py`, model code in `xgboost.ipynb`.
@@ -120,3 +121,5 @@
 | # | Description | CV | LB | Notes |
 |---|------------|----|----|-------|
 | 1 | Baseline XGBoost (defaults), balanced sample weights, 10-fold, native categoricals | 0.96482 ± 0.00127 | 0.95988 | No FE, no tuning, no orig data. CV–LB gap ≈ 0.005 (~4× CV std) — track it. |
+| 2 | Drop `spectral_type` + `galaxy_population` (no orig data) | 0.96482 ± 0.00120 | 0.96041 | Identical CV, **LB up +0.0005** (0.95988→0.96041). Removing noise cols helped test generalization even though CV flat. CV–LB gap 0.0044. Dropped permanently; schema now matches original (no NaN on concat). |
+| — | (provisional) Concat original data WITHOUT train/val separation | 0.96698 ± 0.00063 | — | Caveat: original rows leaked into val folds → easier rows inflate CV + tighten std. NOT a clean read. Must re-run train-only protocol. |
