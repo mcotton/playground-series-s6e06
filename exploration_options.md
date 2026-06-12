@@ -52,7 +52,7 @@
 - Pipeline in `common.py`, model code in `xgboost.ipynb`.
 - **Best model = Exp #4: Optuna-tuned XGBoost on 8 features (cats dropped, no original data). CV 0.96548 ± 0.00124, LB 0.96668.**
 - 10-fold StratifiedKFold, `compute_sample_weight('balanced')` (computed per-fold on train), scored with `balanced_accuracy_score`. GPU (`device='cuda'`).
-- Color features (`u-g, g-r, r-i, i-z`) added in `make_new_features`, but result inconclusive at #4's params (Exp #5). **Next: re-run Optuna WITH colors** — fair test requires re-tuning (esp. `max_depth`, `colsample_bytree`).
+- Colors re-tuned (Exp #6) but bundled with 3 other changes (re-added cats, redshift×color products, `sky_dist`) → regressed LB and confounded attribution. **Next: roll working tree back to #4's feature set (8 features, cats dropped), then add ONE feature group at a time — start with colors alone, re-tuned, to get a clean read on whether colors help.** Keep the #6 improvement of tuning `n_estimators`.
 - Original dataset: tested, dropped (Exp #3).
 - Synthetic cats (`spectral_type`, `galaxy_population`): tested, dropped (Exp #2).
 
@@ -109,6 +109,15 @@ n_estimators:     2000  (early_stopping_rounds=50 during CV; final model uses fi
 
 ---
 
+## Exp #6 Feature-Importance Read (gain vs total_gain) — and why it does NOT overturn the LB
+
+Plotted `gain` (avg per split) and `total_gain` (summed) for the #6 model. Big lesson: **importance measures in-sample *usage*, not out-of-sample *value*. When importance and the LB disagree, trust the LB.**
+
+- **Synthetic cats look important but aren't.** `spectral_type` has the **highest gain of all features** (483.7); `galaxy_population` is 4th (153). Yet Exp #2 proved dropping them left CV flat and *raised* LB. High in-sample gain on synthetic categoricals = sharp splits that fit noise → **overfitting signature, not a keep signal.** Stay dropped.
+- **Colors beat parent bands (3 of 4) — Color Theory confirmed.** total_gain: `g_r` 1.06M ≫ `g` 396k / `r` 122k; `u_g` 686k > `u` 311k / `g`; `r_i` 408k > `r` / `i` 237k. **Exception: `i_z` is dead last** (93k, below `i` and `z`) → near-IR color carries little signal, **drop candidate.**
+- **`sky_dist` confirmed weak** (gain 12, total_gain 157k, near bottom) — positional, matches `alpha/delta` being noise. **Drop.**
+- **Redshift×color products rank high but are CONFOUNDED.** `redshift_g_r` is #2 by total_gain, `redshift_u_g` #5 — contradicts the "products rarely help" prior. BUT importance is **shared among correlated features**; these are correlated with `redshift` (#1) and their parent colors, so high total_gain may just be re-expressing `redshift`. **Importance cannot judge marginal value — only ablation (drop-one / add-one + re-tune) can.** The LB already voted down (#6 regressed); each feature must earn its place via a clean one-at-a-time re-add.
+
 ## Color Feature Theory (why `u-g, g-r, r-i, i-z` should help)
 
 **Physics.** `u, g, r, i, z` are brightness (magnitude) in 5 filters from UV→near-IR. A single magnitude mostly encodes *how bright/far* an object is, not *what kind* it is. The object's **type** lives in the *shape of its spectrum* = how brightness changes between filters = the **differences** between bands (the "colors"). Magnitudes are logarithmic, so a difference `g-r` is really a flux *ratio* — a distance-independent fingerprint of the physics:
@@ -163,3 +172,4 @@ n_estimators:     2000  (early_stopping_rounds=50 during CV; final model uses fi
 | 3 | Concat original data (extra cols dropped, 8 shared features) | 0.96355 ± 0.00075 | 0.95981 | **LB down −0.0006** vs #2. Raw original is off-distribution from synthetic test → distribution shift hurts. **Original data dropped — not worth keeping.** |
 | 4 | **Optuna-tuned XGBoost** (30 trials, 5-fold), 8 features, balanced weights, GPU | 0.96548 ± 0.00124 | **0.96668** | **Best so far. LB jumped +0.0063** vs #2 while CV moved only +0.0018. CV–LB gap flipped: LB now ABOVE CV (+0.0012). Tuning's win was regularization/generalization, which test rewards more than CV shows. See params below. |
 | 5 | Add color features (`u-g, g-r, r-i, i-z`) + **reused #4's params** (NOT re-tuned) | 0.96507 ± 0.00124 | 0.96613 | **Inconclusive.** Both CV (−0.0004) and LB (−0.0005) dipped, but well within CV std (±0.0012) → noise. Params were tuned for the no-color feature set (esp. `max_depth=9`, `colsample_bytree=0.65`) so they don't exploit colors. Must re-tune Optuna *with* colors before judging. |
+| 6 | Colors + **re-added cats** (`spectral_type`, `galaxy_population`) + redshift×color products (`redshift_u_g`, `redshift_g_r`) + `sky_dist`=√(α²+δ²); re-tuned Optuna **with `n_estimators` now a tuned param** | 0.96519 ± 0.00127 | 0.96578 | **Regression — worst LB of #4/#5/#6.** CV up vs #5 (+0.0001, noise) but below #4; **LB down −0.0090 vs #4, −0.0035 vs #5.** **Confounded: 4 changes at once, can't attribute.** 3 of them contradict our own lessons: (a) cats proven non-informative in #2 and re-adding noise/split-capacity is exactly what the synthetic test punishes (LB drops more than CV); (b) `redshift×color` are **products** — "rarely help, trees approximate with splits"; (c) `sky_dist` positional, `alpha/delta` already flagged weak. Only good change = tuning `n_estimators`. **Roll back to #4 feature set; reintroduce one feature at a time.** Best Optuna trial 22: n_est 2846, lr 0.0444, depth 6, mcw 10, subsample 0.909, colsample 0.604, α 9.3e-7, λ 1.9e-4, γ 5.6e-5. |

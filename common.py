@@ -56,11 +56,11 @@ def clean_data(df):
 
     df.rename(columns={"class": "_class"}, inplace=True)
 
-    if 'spectral_type' in orig_feature_names:
-        df.drop('spectral_type', axis=1, inplace=True)
+    # if 'spectral_type' in orig_feature_names:
+    #     df.drop('spectral_type', axis=1, inplace=True)
 
-    if 'galaxy_population' in orig_feature_names:
-        df.drop('galaxy_population', axis=1, inplace=True)
+    # if 'galaxy_population' in orig_feature_names:
+    #     df.drop('galaxy_population', axis=1, inplace=True)
     
     return df
 
@@ -123,37 +123,23 @@ def make_new_features(df):
     target = get_target()
     features = get_features(df)
 
-    df['u-g'] = df['u'] - df['g']
-    df['g-r'] = df['g'] - df['r']
-    df['r-i'] = df['r'] - df['i']
-    df['i-z'] = df['i'] - df['z']
+    df['u_g'] = df['u'] - df['g']
+    df['g_r'] = df['g'] - df['r']
+    df['r_i'] = df['r'] - df['i']
+    df['i_z'] = df['i'] - df['z']
 
-    # df['wet_race'] = df['compound'].map({'HARD': 0, 'MEDIUM': 0, 'SOFT': 0, 'INTERMEDIATE': 1, 'WET': 1})
-    # df['avg_stint_per_race'] = df['race'].map(df.groupby('race')['stint'].median())
+    df['u*g'] = df['u'] * df['g']
+    df['g*r'] = df['g'] * df['r']
+    df['r*i'] = df['r'] * df['i']
+    df['i*z'] = df['i'] * df['z']
 
-    # df['year_cat'] = df['year'].astype('category')
-    
-    # df = df.drop('driver', axis=1)
-    
-    # # These featues hurt CV and LB, XGBoost didn't like them
-    # df['study_x_attendance'] = df['study_hours'] * df['class_attendance']
-    # df['study_hours_sq'] = df['study_hours'] ** 2
-    # df['study_x_sleep'] = df['study_hours'] * df['sleep_hours']
+    df['redshift_u_g'] = df['redshift'] * df['u_g']
+    df['redshift_g_r'] = df['redshift'] * df['g_r']
+    df['redshift_r_i'] = df['redshift'] * df['r_i']
+    df['redshift_i_z'] = df['redshift'] * df['i_z']
 
-    # # trying to identify the groups that miss by > +-30 points, slightly hurt score
-    # df['very_low_effort'] = ((df['study_hours'] < 1) & (df['class_attendance'] < 60)).astype(int)
-    # df['potential_ace'] = ((df['study_hours'] > 3) & (df['class_attendance'] > 70) & (df['sleep_hours'] > 7)).astype(int)
+    df['sky_dist'] = np.sqrt(df['alpha']**2 + df['delta']**2)
 
-    # # High-error cases have ~44 lower study_hours * attendance, it slightly hurt score
-    # df['study_attendance_multi'] = df['study_hours'] * df['class_attendance']
-
-
-    # df['_study_hours_sin'] = np.sin(2 * np.pi * df['study_hours'] / 12).astype('float32')
-    # df['_study_hours_cos'] = np.cos(2 * np.pi * df['study_hours'] / 12).astype('float32')
-    # df['_class_attendance_sin'] = np.sin(2 * np.pi * df['class_attendance'] / 12).astype('float32')
-
-    # df['study_hours_int'] = df['study_hours'].round().astype(int)
-    # df['class_attendace_int'] = df['class_attendance'].round().astype(int)
     
     return df
 
